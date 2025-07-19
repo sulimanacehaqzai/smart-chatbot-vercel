@@ -1,0 +1,10 @@
+{
+  "name": "chatbot-project",
+  "version": "1.0.0",
+  "main": "api/chatbot.js",
+  "dependencies": {
+    "googleapis": "^126.0.1",
+    "google-auth-library": "^9.0.0",
+    "natural": "^6.5.0"
+  }
+}

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+  <meta charset="UTF-8" />
+  <title>چت‌بات هوشمند</title>
+  <style>
+    body { font-family: Tahoma, sans-serif; max-width: 600px; margin: 30px auto; padding: 10px; }
+    input, button { padding: 8px; font-size: 16px; }
+    #answer { margin-top: 20px; background: #f0f0f0; padding: 15px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>چت‌بات هوشمند</h1>
+  <input id="question" type="text" placeholder="سوال خود را اینجا وارد کنید" style="width: 80%" />
+  <button onclick="askQuestion()">ارسال</button>
+  
+  <div id="answer"></div>
+
+  <script>
+    async function askQuestion() {
+      const question = document.getElementById('question').value.trim();
+      if (!question) {
+        alert('لطفا سوالی وارد کنید');
+        return;
+      }
+      const answerDiv = document.getElementById('answer');
+      answerDiv.textContent = 'در حال دریافت پاسخ...';
+
+      try {
+        // اینجا API لوکال یا Vercel را صدا می‌زنیم
+        const response = await fetch(`/api/chatbot?q=${encodeURIComponent(question)}`);
+        const data = await response.json();
+
+        if (data.error) {
+          answerDiv.textContent = 'خطا: ' + data.error;
+        } else {
+          answerDiv.innerHTML = `<strong>پاسخ:</strong> ${data.answer}<br/><small>امتیاز تطابق: ${data.score.toFixed(2)}</small>`;
+        }
+      } catch (err) {
+        answerDiv.textContent = 'خطا در دریافت پاسخ.';
+      }
+    }
+  </script>
+</body>
+</html>
