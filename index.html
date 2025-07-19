@@ -6,318 +6,186 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn&display=swap" rel="stylesheet" />
   <style>
+    /* فونت و رنگ‌ها */
     body {
       font-family: 'Vazirmatn', sans-serif;
-      background: #f9f9f9;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      color: #e0f7fa;
       margin: 0;
       padding: 0;
-    }
-
-    .celebrate {
-      text-align: center;
-      padding: 40px 20px;
-      background: #fff3cd;
-      animation: fadeInUp 1.8s ease-out;
-    }
-
-    .celebrate h2 {
-      font-size: 28px;
-      color: #d63384;
-      animation: pulse 2s infinite ease-in-out;
-    }
-
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 20px;
-      animation: fadeIn 1.6s ease-in-out;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
     h1 {
-      text-align: center;
-      color: #0d47a1;
-      margin-bottom: 30px;
+      margin-top: 40px;
+      font-size: 2.8rem;
+      color: #00e5ff;
+      text-shadow:
+        0 0 5px #00e5ff,
+        0 0 10px #00e5ff,
+        0 0 20px #00b8d4,
+        0 0 30px #00b8d4;
+      letter-spacing: 2px;
     }
 
+    /* باکس سوال و دکمه */
     .input-area {
+      margin: 30px 0;
       display: flex;
-      justify-content: center;
+      width: 90%;
+      max-width: 700px;
       gap: 10px;
-      margin-bottom: 30px;
     }
 
     .input-area input {
-      padding: 10px;
-      font-size: 16px;
-      width: 50%;
-      border: 2px solid #2196f3;
-      border-radius: 10px;
+      flex-grow: 1;
+      padding: 14px 20px;
+      font-size: 18px;
+      border-radius: 12px;
+      border: none;
+      outline: none;
+      background: #102a43;
+      color: #e0f7fa;
+      box-shadow:
+        inset 0 0 5px #00b8d4;
+      transition: box-shadow 0.3s ease;
+    }
+    .input-area input:focus {
+      box-shadow:
+        inset 0 0 12px #00e5ff,
+        0 0 10px #00e5ff;
     }
 
     .input-area button {
-      padding: 10px 20px;
-      background-color: #2196f3;
-      color: white;
-      font-size: 16px;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      transition: background 0.3s ease;
-    }
-
-    .input-area button:hover {
-      background-color: #1769aa;
-    }
-
-    #answer {
-      text-align: center;
+      padding: 0 25px;
       font-size: 18px;
-      margin: 20px auto;
-      max-width: 600px;
-    }
-
-    .founders {
-      display: flex;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 30px;
-      margin: 50px auto;
-    }
-
-    .founder-card {
-      background: #ffffff;
-      border-radius: 16px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-      width: 280px;
-      padding: 25px 20px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-      transition: transform 0.4s ease, box-shadow 0.4s ease;
-      animation: fadeInUp 1.2s ease forwards;
-    }
-
-    .founder-card:hover {
-      transform: translateY(-10px);
-      box-shadow: 0 12px 28px rgba(33, 150, 243, 0.3);
-    }
-
-    .founder-card img {
-      width: 120px;
-      height: 120px;
-      object-fit: cover;
-      border-radius: 50%;
-      border: 4px solid #2196f3;
-      margin-bottom: 15px;
-      transition: transform 0.4s ease;
-    }
-
-    .founder-card:hover img {
-      transform: scale(1.1);
-    }
-
-    .founder-name {
-      font-size: 20px;
+      border-radius: 12px;
+      border: none;
+      background: #00e5ff;
+      color: #003844;
       font-weight: bold;
-      color: #0d47a1;
-      margin-bottom: 10px;
+      cursor: pointer;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+      box-shadow: 0 0 8px #00e5ff;
+    }
+    .input-area button:hover {
+      background: #00b8d4;
+      box-shadow: 0 0 16px #00b8d4;
     }
 
-    .founder-role {
-      font-size: 16px;
-      color: #424242;
-      margin-bottom: 15px;
-    }
-
-    .founder-bio {
-      font-size: 14px;
-      color: #555;
+    /* بخش پاسخ */
+    #answer {
+      width: 90%;
+      max-width: 700px;
+      min-height: 120px;
+      background: #102a43cc;
+      border-radius: 15px;
+      padding: 25px 30px;
+      font-size: 20px;
       line-height: 1.6;
-      opacity: 0;
-      transform: translateY(20px);
-      transition: all 0.5s ease;
+      color: #b2ebf2;
+      box-shadow:
+        0 0 10px #00b8d4;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      position: relative;
+      font-weight: 500;
+      transition: background 0.3s ease;
+      user-select: text;
     }
 
-    .founder-card:hover .founder-bio {
-      opacity: 1;
-      transform: translateY(0);
+    /* انیمیشن تایپ */
+    @keyframes typing {
+      from { width: 0 }
+      to { width: 100% }
     }
 
-    .ads-section, .social-media-section {
-      margin-top: 50px;
-      animation: fadeIn 1.6s ease-in-out;
+    /* نوار تایپینگ */
+    #typing-indicator {
+      position: absolute;
+      bottom: 10px;
+      right: 20px;
+      height: 10px;
+      width: 50px;
+      background: #00e5ff;
+      border-radius: 5px;
+      animation: typing 1.2s infinite alternate;
+      opacity: 0.7;
+      display: none;
     }
 
-    .ads-section h3,
-    .social-media-section h3 {
-      color: #0d47a1;
-      text-align: center;
-      margin-bottom: 20px;
-    }
-
-    .ads-item, .social-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin: 8px auto;
-      max-width: 600px;
-      font-size: 16px;
-      background: #e3f2fd;
-      padding: 10px;
-      border-radius: 10px;
-      animation: fadeInUp 1.4s ease;
-    }
-
-    .ads-item img, .social-item img {
-      width: 24px;
-      height: 24px;
-    }
-
-    .footer {
-      text-align: center;
-      margin-top: 60px;
-      padding: 30px 20px;
-      background: #e0f7fa;
+    /* فوتر */
+    footer {
+      margin-top: auto;
+      padding: 20px;
+      color: #00b8d4aa;
       font-size: 14px;
-      line-height: 2;
-      animation: fadeIn 1.4s ease;
+      text-align: center;
+      user-select: none;
     }
 
+    /* ریسپانسیو */
     @media (max-width: 600px) {
-      .input-area {
-        flex-direction: column;
-        align-items: center;
+      h1 {
+        font-size: 2rem;
       }
 
       .input-area input {
-        width: 90%;
+        font-size: 16px;
+        padding: 12px 15px;
       }
 
-      .founders {
-        flex-direction: column;
-        align-items: center;
+      .input-area button {
+        font-size: 16px;
+        padding: 0 15px;
       }
 
-      .founder-card {
-        width: 90%;
-      }
-    }
-    /* Fade In Up - نرم و حرفه‌ای */
-    @keyframes fadeInUp {
-      0% {
-        opacity: 0;
-        transform: translateY(60px) scale(0.95);
-        filter: blur(8px);
-      }
-      100% {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-        filter: blur(0);
-      }
-    }
-
-    /* Fade In with Zoom & Glow */
-    @keyframes fadeIn {
-      0% {
-        opacity: 0;
-        transform: scale(0.85) rotateX(15deg);
-        filter: brightness(80%) blur(4px);
-      }
-      100% {
-        opacity: 1;
-        transform: scale(1) rotateX(0);
-        filter: brightness(100%) blur(0);
-      }
-    }
-
-    /* Pulse Effect with Neon Glow */
-    @keyframes pulse {
-      0%, 100% {
-        transform: scale(1);
-        text-shadow: 0 0 0 transparent;
-        color: #040303;
-      }
-      50% {
-        transform: scale(1.08);
-        text-shadow: 0 0 15px rgba(0, 255, 200, 0.8), 0 0 5px rgba(0, 255, 255, 0.5);
-        color: #00fff7;
+      #answer {
+        font-size: 16px;
+        padding: 20px;
       }
     }
   </style>
 </head>
 <body>
 
-  <div class="celebrate">
-    <h2>🎉 به اولین رونمایی از هوش مصنوعی شرکت البرز پارسا خوش آمدید! 🎉</h2>
+  <h1>🤖 چت‌بات هوش مصنوعی البرز پارسا</h1>
+
+  <div class="input-area">
+    <input id="question" type="text" placeholder="سوال خود را اینجا وارد کنید..." autocomplete="off" />
+    <button onclick="askQuestion()">ارسال</button>
   </div>
 
-  <div class="container">
-    <h1>چت‌بات هوشمند البرز پارسا</h1>
-    <div class="input-area">
-      <input id="question" type="text" placeholder="سوال خود را وارد کنید..." />
-      <button onclick="askQuestion()">ارسال</button>
-    </div>
-    <div id="answer"></div>
+  <div id="answer"></div>
+  <div id="typing-indicator"></div>
 
-    <div class="founders">
-      <div class="founder-card">
-        <img src="https://i.postimg.cc/63zdTCJ1/ehsan.jpg" alt="احسان الله اسحق‌زی" />
-        <h4 class="founder-name">احسان‌الله اسحق‌زی</h4>
-        <p class="founder-role">رییس شرکت<br />۷ سال سابقه در البرز پارسا</p>
-        <p class="founder-bio">
-          مدیر ارشد پروژه‌های هوش مصنوعی، مشاور تکنالوژی و توسعه‌دهنده ویب سایت ها و تبلیغات صفحات اجتماعی
-        </p>
-      </div>
-      <div class="founder-card">
-        <img src="https://i.postimg.cc/vTB5nDG8/bilal.jpg" alt="بلال اسحق‌زی" />
-        <h4 class="founder-name">بلال اسحق‌زی</h4>
-        <p class="founder-role">معاون شرکت</p>
-        <p class="founder-bio">
-          مسسول بخش ویزه تجاری، سیاحتی، تجاری، تحصیلی ، خدمات ویزه عاجل و فروشات بوکینگ تکت ها پرواز
-        </p>
-      </div>
-    </div>
-
-    <div class="ads-section">
-      <h3>🌍 خدمات ویزه کشورهای خارجی</h3>
-      <div class="ads-item"><img src="https://i.postimg.cc/C1wGFmtq/pk.png" alt="پاکستان" /> ویزه پاکستان - سریع و تضمینی</div>
-      <div class="ads-item"><img src="https://i.postimg.cc/jSJQvWPL/ir.png" alt="ایران" /> ویزه ایران - ویژه محصلین</div>
-      <div class="ads-item"><img src="https://i.postimg.cc/25QdRPHY/in.webp" alt="هندوستان" /> ویزه هندوستان - با پرواز و اقامت</div>
-      <div class="ads-item"><img src="https://i.postimg.cc/QMGgzXJS/sa.png" alt="عربستان" /> ویزه عربستان - عمره، کار و تجارت</div>
-    </div>
-
-    <div class="social-media-section">
-      <h3>📢 تبلیغات شبکه‌های اجتماعی</h3>
-      <div class="social-item"><img src="https://i.postimg.cc/Dy0cJpzQ/facebook.webp" alt="فیسبوک" /> مدیریت و افزایش لایک، بازدید، فالور در فیسبوک</div>
-      <div class="social-item"><img src="https://i.postimg.cc/VLhWj9Sx/instagram.avif" alt="اینستاگرام" /> تبلیغات پیشرفته اینستاگرام با بازده بالا</div>
-      <div class="social-item"><img src="https://i.postimg.cc/FzWgC3TJ/youtube.png" alt="یوتیوب" /> افزایش ویو و سابسکرایب یوتیوب</div>
-      <div class="social-item"><img src="https://i.postimg.cc/Y2b3SBtq/telegram.png" alt="تلگرام" /> مدیریت کانال و ممبر تلگرام</div>
-      <div class="social-item"><img src="https://i.postimg.cc/d3tj94jY/tiktok.jpg" alt="تیک‌تاک" /> جذب فالور و ویو در تیک‌تاک</div>
-    </div>
-
-    <div class="footer">
-      <p>📍 آدرس: کابل، مرکز تجارتی داودزی، دفتر B3-85</p>
-      <p>📞 تماس: 0079962-073 | ✉️ ایمیل: info@alborzparsa.af</p>
-      <p>🧠 این هوش مصنوعی در حال یادگیری زبان‌های پشتو و انگلیسی است. به‌زودی خدمات بیشتر ارائه خواهد شد.</p>
-      <p>© طراحی شده توسط البرز پارسا - 2025</p>
-    </div>
-  </div>
+  <footer>
+    © 2025 البرز پارسا | توسعه توسط تیم هوش مصنوعی
+  </footer>
 
   <script>
+    const answerDiv = document.getElementById('answer');
+    const typingIndicator = document.getElementById('typing-indicator');
+
     async function askQuestion() {
-      const questionInput = document.getElementById("question");
-      const answerDiv = document.getElementById("answer");
+      const questionInput = document.getElementById('question');
       const question = questionInput.value.trim();
       if (!question) {
         alert("لطفاً یک سوال وارد کنید");
         return;
       }
 
-      answerDiv.innerHTML = "در حال دریافت پاسخ...";
+      answerDiv.textContent = '';
+      typingIndicator.style.display = 'block';
 
       try {
         const res = await fetch(`/api/chatbot?q=${encodeURIComponent(question)}`);
         const data = await res.json();
+
+        typingIndicator.style.display = 'none';
 
         if (data.error) {
           answerDiv.textContent = 'خطا: ' + data.error;
@@ -325,11 +193,12 @@
           typeText(answerDiv, `پاسخ: ${data.answer}`);
         }
       } catch (e) {
+        typingIndicator.style.display = 'none';
         answerDiv.textContent = "خطا در دریافت پاسخ.";
       }
     }
 
-    function typeText(element, text, speed = 35) {
+    function typeText(element, text, speed = 30) {
       element.textContent = '';
       let index = 0;
       const interval = setInterval(() => {
