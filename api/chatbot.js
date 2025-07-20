@@ -1,24 +1,20 @@
 const { WordTokenizer, JaroWinklerDistance } = require('natural');
 const { google } = require('googleapis');
-const path = require('path');
 
 const tokenizer = new WordTokenizer();
 
-// مسیر فایل credentials.json که از Google Cloud دانلود کردی
-const KEYFILEPATH = path.join(__dirname, 'credentials.json');
-const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
-
-// آیدی شیت خودت را اینجا جایگزین کن
+// آیدی شیت شما
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
-
-// محدوده سلول‌ها (فرض: ستون A = سوال و ستون B = پاسخ)
 const RANGE = 'Sheet1!A:B';
 
-// تابع گرفتن داده‌ها از Google Sheets
+// گرفتن داده‌ها از Google Sheets
 async function getSheetData() {
   const auth = new google.auth.GoogleAuth({
-    keyFile: KEYFILEPATH,
-    scopes: SCOPES,
+    credentials: {
+      client_email: process.env.CLIENT_EMAIL,
+      private_key: process.env.PRIVATE_KEY.replace(/\\n/g, '\n')
+    },
+    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
   });
 
   const client = await auth.getClient();
@@ -30,17 +26,14 @@ async function getSheetData() {
   });
 
   const rows = res.data.values || [];
-  // حذف ردیف عنوان و تبدیل به آرایه از اشیاء
-  const data = rows.slice(1).map(row => ({
+  return rows.slice(1).map(row => ({
     سوال: row[0] || '',
     پاسخ: row[1] || '',
   }));
-
-  return data;
 }
 
 // هندلر API
-module.exports = async function handler(req, res) {
+module.exports = async (req, res) => {
   const userQuestion = req.query.q?.toLowerCase();
   if (!userQuestion) {
     return res.status(400).json({ error: "سوال ارسال نشده است" });
@@ -56,7 +49,6 @@ module.exports = async function handler(req, res) {
     for (let row of data) {
       const sheetQuestion = (row["سوال"] || "").toLowerCase();
       const sheetAnswer = row["پاسخ"] || "";
-
       const score = JaroWinklerDistance(userQuestion, sheetQuestion);
 
       if (score > bestScore) {
