@@ -1,20 +1,24 @@
 const { WordTokenizer, JaroWinklerDistance } = require('natural');
 const { google } = require('googleapis');
+const path = require('path');
 
 const tokenizer = new WordTokenizer();
 
-// آیدی شیت شما
+// مسیر فایل credentials.json
+const KEYFILEPATH = path.join(__dirname, 'credentials.json');
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+
+// آیدی شیت خود
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
+
+// محدوده سوال و پاسخ (ستون A و B در Sheet1)
 const RANGE = 'Sheet1!A:B';
 
-// گرفتن داده‌ها از Google Sheets
+// گرفتن داده‌ها از شیت
 async function getSheetData() {
   const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.CLIENT_EMAIL,
-      private_key: process.env.PRIVATE_KEY.replace(/\\n/g, '\n')
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+    keyFile: KEYFILEPATH,
+    scopes: SCOPES,
   });
 
   const client = await auth.getClient();
@@ -32,8 +36,28 @@ async function getSheetData() {
   }));
 }
 
+// ذخیره سوال بی‌پاسخ در شیت Unanswered
+async function saveUnansweredQuestion(question) {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: KEYFILEPATH,
+    scopes: SCOPES,
+  });
+
+  const client = await auth.getClient();
+  const sheets = google.sheets({ version: 'v4', auth: client });
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'Unanswered!A:A',  // شیت جدید به نام Unanswered
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: [[question]],
+    },
+  });
+}
+
 // هندلر API
-module.exports = async (req, res) => {
+module.exports = async function handler(req, res) {
   const userQuestion = req.query.q?.toLowerCase();
   if (!userQuestion) {
     return res.status(400).json({ error: "سوال ارسال نشده است" });
@@ -49,6 +73,7 @@ module.exports = async (req, res) => {
     for (let row of data) {
       const sheetQuestion = (row["سوال"] || "").toLowerCase();
       const sheetAnswer = row["پاسخ"] || "";
+
       const score = JaroWinklerDistance(userQuestion, sheetQuestion);
 
       if (score > bestScore) {
@@ -58,8 +83,12 @@ module.exports = async (req, res) => {
       }
     }
 
+    // اگر پاسخ مناسب نبود، سوال را در شیت ذخیره کن
     if (bestScore < 0.7) {
-      return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد." });
+      await saveUnansweredQuestion(userQuestion);
+      return res.json({ 
+        answer: "متأسفم، پاسخ مناسب پیدا نشد. سوال شما ذخیره شد تا در آینده پاسخ داده شود." 
+      });
     }
 
     return res.json({ answer: bestAnswer, match: bestMatch, score: bestScore });
