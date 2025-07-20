@@ -7,18 +7,21 @@ const tokenizer = new WordTokenizer();
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
 const RANGE = 'Sheet1!A:B';
 
-// گرفتن داده‌ها از Google Sheets
-async function getSheetData() {
-  const auth = new google.auth.GoogleAuth({
+// احراز هویت
+function getAuth() {
+  return new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.CLIENT_EMAIL,
       private_key: process.env.PRIVATE_KEY.replace(/\\n/g, '\n')
     },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
   });
+}
 
-  const client = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: client });
+// گرفتن داده‌ها از Google Sheets
+async function getSheetData() {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -32,6 +35,23 @@ async function getSheetData() {
   }));
 }
 
+// اضافه کردن سوالات بی‌پاسخ به Google Sheet
+async function addUnansweredQuestion(question) {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'Sheet1!A:A',
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [[question]],
+    },
+  });
+
+  console.log(`سوال بی‌پاسخ به شیت اضافه شد: ${question}`);
+}
+
 // هندلر API
 module.exports = async (req, res) => {
   const userQuestion = req.query.q?.toLowerCase();
@@ -42,7 +62,6 @@ module.exports = async (req, res) => {
   try {
     const data = await getSheetData();
 
-    let bestMatch = "";
     let bestAnswer = "";
     let bestScore = 0;
 
@@ -53,16 +72,16 @@ module.exports = async (req, res) => {
 
       if (score > bestScore) {
         bestScore = score;
-        bestMatch = sheetQuestion;
         bestAnswer = sheetAnswer;
       }
     }
 
-    if (bestScore < 0.7) {
+    if (bestScore < 0.7 || !bestAnswer) {
+      await addUnansweredQuestion(userQuestion);
       return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد." });
     }
 
-    return res.json({ answer: bestAnswer, match: bestMatch, score: bestScore });
+    return res.json({ answer: bestAnswer, score: bestScore });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "خطا در ارتباط با سیستم پاسخ‌گو" });
