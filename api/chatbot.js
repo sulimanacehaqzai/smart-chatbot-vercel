@@ -4,17 +4,17 @@ const path = require('path');
 
 const tokenizer = new WordTokenizer();
 
-// مسیر فایل credentials.json
+// مسیر فایل credentials.json که از Google Cloud دانلود کردی
 const KEYFILEPATH = path.join(__dirname, 'credentials.json');
-const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 
-// آیدی شیت خود
+// آیدی شیت خودت را اینجا جایگزین کن
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
 
-// محدوده سوال و پاسخ (ستون A و B در Sheet1)
+// محدوده سلول‌ها (فرض: ستون A = سوال و ستون B = پاسخ)
 const RANGE = 'Sheet1!A:B';
 
-// گرفتن داده‌ها از شیت
+// تابع گرفتن داده‌ها از Google Sheets
 async function getSheetData() {
   const auth = new google.auth.GoogleAuth({
     keyFile: KEYFILEPATH,
@@ -30,30 +30,13 @@ async function getSheetData() {
   });
 
   const rows = res.data.values || [];
-  return rows.slice(1).map(row => ({
+  // حذف ردیف عنوان و تبدیل به آرایه از اشیاء
+  const data = rows.slice(1).map(row => ({
     سوال: row[0] || '',
     پاسخ: row[1] || '',
   }));
-}
 
-// ذخیره سوال بی‌پاسخ در شیت Unanswered
-async function saveUnansweredQuestion(question) {
-  const auth = new google.auth.GoogleAuth({
-    keyFile: KEYFILEPATH,
-    scopes: SCOPES,
-  });
-
-  const client = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: client });
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
-    range: 'Unanswered!A:A',  // شیت جدید به نام Unanswered
-    valueInputOption: 'USER_ENTERED',
-    requestBody: {
-      values: [[question]],
-    },
-  });
+  return data;
 }
 
 // هندلر API
@@ -83,12 +66,8 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // اگر پاسخ مناسب نبود، سوال را در شیت ذخیره کن
     if (bestScore < 0.7) {
-      await saveUnansweredQuestion(userQuestion);
-      return res.json({ 
-        answer: "متأسفم، پاسخ مناسب پیدا نشد. سوال شما ذخیره شد تا در آینده پاسخ داده شود." 
-      });
+      return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد." });
     }
 
     return res.json({ answer: bestAnswer, match: bestMatch, score: bestScore });
