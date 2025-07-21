@@ -2,31 +2,17 @@ const { WordTokenizer, JaroWinklerDistance } = require('natural');
 const { google } = require('googleapis');
 const fetch = require('node-fetch');
 
-// ---- CONFIG ----
+const tokenizer = new WordTokenizer();
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
 const RANGE = 'Sheet1!A:B';
-const HF_MODEL = 'bigscience/bloomz-560m'; // مدل سبک HuggingFace
 
-// ---- توابع ----
-const tokenizer = new WordTokenizer();
-
-async function getSheetData() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.CLIENT_EMAIL,
-      private_key: process.env.PRIVATE_KEY.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-
-  const client = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: client });
-
+// گرفتن داده‌ها از Google Sheets
+async function getSheetData(auth) {
+  const sheets = google.sheets({ version: 'v4', auth });
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: RANGE,
   });
-
   const rows = res.data.values || [];
   return rows.slice(1).map(row => ({
     سوال: row[0] || '',
@@ -34,7 +20,39 @@ async function getSheetData() {
   }));
 }
 
-async function saveUnansweredQuestion(question) {
+// ذخیره سوال و پاسخ در Google Sheets
+async function appendToSheet(auth, question, answer) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: RANGE,
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [[question, answer]],
+    },
+  });
+}
+
+// تولید پاسخ از HuggingFace
+async function getAIResponse(question) {
+  const HF_API_TOKEN = process.env.HF_API_TOKEN; // توکن HuggingFace
+  const response = await fetch("https://api-inference.huggingface.co/models/google/flan-t5-base", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${HF_API_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ inputs: question })
+  });
+  const result = await response.json();
+  return result[0]?.generated_text || "پاسخی پیدا نشد.";
+}
+
+// هندلر API
+module.exports = async (req, res) => {
+  const userQuestion = req.query.q?.toLowerCase();
+  if (!userQuestion) return res.status(400).json({ error: "سوال ارسال نشده است" });
+
   try {
     const auth = new google.auth.GoogleAuth({
       credentials: {
@@ -44,54 +62,7 @@ async function saveUnansweredQuestion(question) {
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
-    const client = await auth.getClient();
-    const sheets = google.sheets({ version: 'v4', auth: client });
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'Sheet1!A:A',
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: [[question]],
-      },
-    });
-  } catch (error) {
-    console.error('خطا در ذخیره سوال بی‌پاسخ:', error);
-  }
-}
-
-async function askHuggingFace(question) {
-  try {
-    const response = await fetch(`https://api-inference.huggingface.co/models/${HF_MODEL}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.HF_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ inputs: question }),
-    });
-
-    const result = await response.json();
-    if (result.error) {
-      console.error('HuggingFace Error:', result.error);
-      return "پاسخ مناسبی پیدا نشد.";
-    }
-    return result[0]?.generated_text || "پاسخ مناسبی پیدا نشد.";
-  } catch (err) {
-    console.error('HuggingFace API Error:', err);
-    return "خطا در تولید پاسخ.";
-  }
-}
-
-// ---- هندلر API ----
-module.exports = async (req, res) => {
-  const userQuestion = req.query.q?.toLowerCase();
-  if (!userQuestion) {
-    return res.status(400).json({ error: "سوال ارسال نشده است" });
-  }
-
-  try {
-    const data = await getSheetData();
+    const data = await getSheetData(auth);
 
     let bestMatch = "";
     let bestAnswer = "";
@@ -110,13 +81,17 @@ module.exports = async (req, res) => {
     }
 
     if (bestScore < 0.7) {
-      // ذخیره سوال و پرسش از HuggingFace
-      await saveUnansweredQuestion(userQuestion);
-      const hfAnswer = await askHuggingFace(userQuestion);
-      return res.json({ answer: hfAnswer, match: "AI Response", score: 0 });
+      // پاسخ از HuggingFace
+      const aiAnswer = await getAIResponse(userQuestion);
+
+      // ذخیره سوال و پاسخ در Google Sheets
+      await appendToSheet(auth, userQuestion, aiAnswer);
+
+      return res.json({ answer: aiAnswer, match: "AI Response", score: 1 });
     }
 
     return res.json({ answer: bestAnswer, match: bestMatch, score: bestScore });
+
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "خطا در ارتباط با سیستم پاسخ‌گو" });
