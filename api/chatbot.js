@@ -3,10 +3,12 @@ const { google } = require('googleapis');
 
 const tokenizer = new WordTokenizer();
 
-// آیدی شیت شما
+// مشخصات Google Sheets
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
 const RANGE = 'Sheet1!A:B';
+const UNANSWERED_RANGE = 'Unanswered!A:A'; // شیت مخصوص سوالات بی‌پاسخ
 
+// ایجاد احراز هویت
 function getAuth() {
   return new google.auth.GoogleAuth({
     credentials: {
@@ -17,7 +19,7 @@ function getAuth() {
   });
 }
 
-// گرفتن داده‌ها از Google Sheets
+// دریافت داده‌ها از Google Sheets
 async function getSheetData() {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
@@ -28,41 +30,47 @@ async function getSheetData() {
   });
 
   const rows = res.data.values || [];
-  return rows.slice(1).map(row => ({
+  return rows.map(row => ({
     سوال: row[0] || '',
     پاسخ: row[1] || '',
   }));
 }
 
-// تابع محاسبه شباهت
+// ذخیره سوال بی‌پاسخ در Google Sheets
+async function addUnansweredQuestion(question) {
+  try {
+    const auth = getAuth();
+    const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: UNANSWERED_RANGE,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [[question]]
+      }
+    });
+
+    console.log(`سوال بی‌پاسخ ذخیره شد: ${question}`);
+  } catch (err) {
+    console.error("خطا در ذخیره سوال بی‌پاسخ:", err);
+  }
+}
+
+// محاسبه شباهت بهتر بین سوال‌ها
 function calculateSimilarity(q1, q2) {
-  const score1 = JaroWinklerDistance(q1, q2);
+  if (!q1 || !q2) return 0;
 
   const tokens1 = tokenizer.tokenize(q1);
   const tokens2 = tokenizer.tokenize(q2);
 
+  // درصد کلمات مشترک
   const common = tokens1.filter(word => tokens2.includes(word)).length;
   const tokenScore = common / Math.max(tokens1.length, tokens2.length);
 
-  // میانگین وزنی: 70% JaroWinkler + 30% بر اساس کلمات مشترک
-  return 0.7 * score1 + 0.3 * tokenScore;
-}
-
-// اضافه کردن سوالات بی‌پاسخ به Google Sheet
-async function addUnansweredQuestion(question) {
-  const auth = getAuth();
-  const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
-    range: 'Sheet1!A:A',
-    valueInputOption: 'RAW',
-    requestBody: {
-      values: [[question]],
-    },
-  });
-
-  console.log(`سوال بی‌پاسخ به شیت اضافه شد: ${question}`);
+  // میانگین JaroWinkler و TokenScore
+  const jwScore = JaroWinklerDistance(q1, q2);
+  return (jwScore + tokenScore) / 2;
 }
 
 // هندلر API
@@ -74,7 +82,9 @@ module.exports = async (req, res) => {
 
   try {
     const data = await getSheetData();
+    console.log("داده‌های شیت:", data);
 
+    let bestMatch = "";
     let bestAnswer = "";
     let bestScore = 0;
 
@@ -85,16 +95,18 @@ module.exports = async (req, res) => {
 
       if (score > bestScore) {
         bestScore = score;
+        bestMatch = sheetQuestion;
         bestAnswer = sheetAnswer;
       }
     }
 
-    if (bestScore < 0.5 || !bestAnswer) {  // آستانه کمی پایین‌تر گذاشته شد
+    // اگر پاسخ پیدا نشود
+    if (bestScore < 0.5 || !bestAnswer) {
       await addUnansweredQuestion(userQuestion);
       return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد." });
     }
 
-    return res.json({ answer: bestAnswer, score: bestScore });
+    return res.json({ answer: bestAnswer, match: bestMatch, score: bestScore });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "خطا در ارتباط با سیستم پاسخ‌گو" });
