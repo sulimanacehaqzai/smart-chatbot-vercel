@@ -2,6 +2,10 @@ const { google } = require('googleapis');
 const natural = require('natural');
 const TfIdf = natural.TfIdf;
 
+// توقف‌واژه‌های فارسی
+const stopWords = ['از', 'که', 'را', 'با', 'در', 'به', 'برای', 'و', 'یا', 'اما', 'یک', 'این', 'آن', 'چه', 'می'];
+
+// آیدی شیت
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
 const RANGE = 'Sheet1!A:B';
 
@@ -16,7 +20,7 @@ function getAuth() {
   });
 }
 
-// گرفتن داده‌ها از شیت
+// گرفتن داده از شیت
 async function getSheetData() {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
@@ -33,7 +37,7 @@ async function getSheetData() {
   }));
 }
 
-// اضافه کردن سوال بدون پاسخ
+// ذخیره سوال بی پاسخ
 async function addUnansweredQuestion(question) {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
@@ -48,11 +52,20 @@ async function addUnansweredQuestion(question) {
   });
 }
 
-// تابع محاسبه شباهت Cosine
+// پاک‌سازی متن از توقف‌واژه‌ها
+function cleanText(text) {
+  return text
+    .split(/\s+/)
+    .filter(word => !stopWords.includes(word))
+    .join(' ');
+}
+
+// محاسبه شباهت Cosine
 function cosineSimilarity(str1, str2) {
   const tfidf = new TfIdf();
-  tfidf.addDocument(str1);
-  tfidf.addDocument(str2);
+  tfidf.addDocument(cleanText(str1));
+  tfidf.addDocument(cleanText(str2));
+
   const vector1 = [];
   const vector2 = [];
 
@@ -61,7 +74,6 @@ function cosineSimilarity(str1, str2) {
     vector2.push(tfidf.tfidf(term.term, 1));
   });
 
-  // محاسبه شباهت
   let dotProduct = 0;
   let magA = 0;
   let magB = 0;
@@ -91,7 +103,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    if (bestScore < 0.4 || !bestAnswer) { // آستانه برای تشابه معنایی
+    if (bestScore < 0.3 || !bestAnswer) {
       await addUnansweredQuestion(userQuestion);
       return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد.", score: bestScore });
     }
