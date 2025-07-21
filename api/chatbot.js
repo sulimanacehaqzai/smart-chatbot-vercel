@@ -7,7 +7,6 @@ const tokenizer = new WordTokenizer();
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
 const RANGE = 'Sheet1!A:B';
 
-// احراز هویت
 function getAuth() {
   return new google.auth.GoogleAuth({
     credentials: {
@@ -33,6 +32,20 @@ async function getSheetData() {
     سوال: row[0] || '',
     پاسخ: row[1] || '',
   }));
+}
+
+// تابع محاسبه شباهت
+function calculateSimilarity(q1, q2) {
+  const score1 = JaroWinklerDistance(q1, q2);
+
+  const tokens1 = tokenizer.tokenize(q1);
+  const tokens2 = tokenizer.tokenize(q2);
+
+  const common = tokens1.filter(word => tokens2.includes(word)).length;
+  const tokenScore = common / Math.max(tokens1.length, tokens2.length);
+
+  // میانگین وزنی: 70% JaroWinkler + 30% بر اساس کلمات مشترک
+  return 0.7 * score1 + 0.3 * tokenScore;
 }
 
 // اضافه کردن سوالات بی‌پاسخ به Google Sheet
@@ -68,7 +81,7 @@ module.exports = async (req, res) => {
     for (let row of data) {
       const sheetQuestion = (row["سوال"] || "").toLowerCase();
       const sheetAnswer = row["پاسخ"] || "";
-      const score = JaroWinklerDistance(userQuestion, sheetQuestion);
+      const score = calculateSimilarity(userQuestion, sheetQuestion);
 
       if (score > bestScore) {
         bestScore = score;
@@ -76,7 +89,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    if (bestScore < 0.7 || !bestAnswer) {
+    if (bestScore < 0.5 || !bestAnswer) {  // آستانه کمی پایین‌تر گذاشته شد
       await addUnansweredQuestion(userQuestion);
       return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد." });
     }
