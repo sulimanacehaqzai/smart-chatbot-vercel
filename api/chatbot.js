@@ -1,15 +1,13 @@
-const { WordTokenizer, JaroWinklerDistance, PorterStemmerFa } = require('natural');
+const { WordTokenizer, JaroWinklerDistance } = require('natural');
 const { google } = require('googleapis');
+
 const tokenizer = new WordTokenizer();
 
-// آیدی شیت
+// آیدی شیت شما
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
 const RANGE = 'Sheet1!A:B';
 
-// لیست Stop Words برای فارسی
-const STOP_WORDS = ["از", "برای", "که", "به", "در", "یک", "با", "های", "را", "هم", "و", "یا", "این", "آن", "تا", "چه"];
-
-// ---- احراز هویت ----
+// احراز هویت
 function getAuth() {
   return new google.auth.GoogleAuth({
     credentials: {
@@ -20,7 +18,7 @@ function getAuth() {
   });
 }
 
-// ---- گرفتن داده‌ها از Google Sheets ----
+// گرفتن داده‌ها از Google Sheets
 async function getSheetData() {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
@@ -37,7 +35,7 @@ async function getSheetData() {
   }));
 }
 
-// ---- اضافه کردن سوالات بی‌پاسخ به Google Sheet ----
+// اضافه کردن سوالات بی‌پاسخ به Google Sheet
 async function addUnansweredQuestion(question) {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
@@ -54,31 +52,9 @@ async function addUnansweredQuestion(question) {
   console.log(`سوال بی‌پاسخ به شیت اضافه شد: ${question}`);
 }
 
-// ---- پیش‌پردازش متن ----
-function preprocess(text) {
-  return tokenizer
-    .tokenize(text.toLowerCase().replace(/[^\u0600-\u06FFa-z0-9\s]/g, ''))
-    .filter(word => !STOP_WORDS.includes(word))
-    .map(word => PorterStemmerFa.stem(word)); // ریشه‌یابی کلمات فارسی
-}
-
-// ---- محاسبه شباهت بین دو جمله ----
-function calculateSimilarity(question1, question2) {
-  const tokens1 = preprocess(question1);
-  const tokens2 = preprocess(question2);
-
-  const joined1 = tokens1.join(" ");
-  const joined2 = tokens2.join(" ");
-
-  const jaro = JaroWinklerDistance(joined1, joined2);
-  const overlap = tokens1.filter(t => tokens2.includes(t)).length / Math.max(tokens1.length, tokens2.length);
-
-  return (jaro * 0.7) + (overlap * 0.3); // ترکیب Jaro-Winkler و Overlap
-}
-
-// ---- هندلر API ----
+// هندلر API
 module.exports = async (req, res) => {
-  const userQuestion = req.query.q?.trim();
+  const userQuestion = req.query.q?.toLowerCase();
   if (!userQuestion) {
     return res.status(400).json({ error: "سوال ارسال نشده است" });
   }
@@ -90,17 +66,17 @@ module.exports = async (req, res) => {
     let bestScore = 0;
 
     for (let row of data) {
-      const sheetQuestion = row["سوال"] || "";
+      const sheetQuestion = (row["سوال"] || "").toLowerCase();
       const sheetAnswer = row["پاسخ"] || "";
+      const score = JaroWinklerDistance(userQuestion, sheetQuestion);
 
-      const score = calculateSimilarity(userQuestion, sheetQuestion);
       if (score > bestScore) {
         bestScore = score;
         bestAnswer = sheetAnswer;
       }
     }
 
-    if (bestScore < 0.6 || !bestAnswer) {
+    if (bestScore < 0.7 || !bestAnswer) {
       await addUnansweredQuestion(userQuestion);
       return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد." });
     }
