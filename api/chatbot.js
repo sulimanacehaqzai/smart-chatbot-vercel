@@ -1,15 +1,13 @@
+const { WordTokenizer, JaroWinklerDistance } = require('natural');
 const { google } = require('googleapis');
-const natural = require('natural');
-const TfIdf = natural.TfIdf;
 
-// توقف‌واژه‌های فارسی
-const stopWords = ['از', 'که', 'را', 'با', 'در', 'به', 'برای', 'و', 'یا', 'اما', 'یک', 'این', 'آن', 'چه', 'می'];
+const tokenizer = new WordTokenizer();
 
-// آیدی شیت
+// آیدی شیت شما
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
 const RANGE = 'Sheet1!A:B';
 
-// احراز هویت گوگل
+// احراز هویت
 function getAuth() {
   return new google.auth.GoogleAuth({
     credentials: {
@@ -20,7 +18,7 @@ function getAuth() {
   });
 }
 
-// گرفتن داده از شیت
+// گرفتن داده‌ها از Google Sheets
 async function getSheetData() {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
@@ -32,12 +30,12 @@ async function getSheetData() {
 
   const rows = res.data.values || [];
   return rows.slice(1).map(row => ({
-    سوال: (row[0] || '').toLowerCase(),
+    سوال: row[0] || '',
     پاسخ: row[1] || '',
   }));
 }
 
-// ذخیره سوال بی پاسخ
+// اضافه کردن سوالات بی‌پاسخ به Google Sheet
 async function addUnansweredQuestion(question) {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
@@ -50,62 +48,37 @@ async function addUnansweredQuestion(question) {
       values: [[question]],
     },
   });
-}
 
-// پاک‌سازی متن از توقف‌واژه‌ها
-function cleanText(text) {
-  return text
-    .split(/\s+/)
-    .filter(word => !stopWords.includes(word))
-    .join(' ');
-}
-
-// محاسبه شباهت Cosine
-function cosineSimilarity(str1, str2) {
-  const tfidf = new TfIdf();
-  tfidf.addDocument(cleanText(str1));
-  tfidf.addDocument(cleanText(str2));
-
-  const vector1 = [];
-  const vector2 = [];
-
-  tfidf.listTerms(0).forEach(term => {
-    vector1.push(term.tfidf);
-    vector2.push(tfidf.tfidf(term.term, 1));
-  });
-
-  let dotProduct = 0;
-  let magA = 0;
-  let magB = 0;
-  for (let i = 0; i < vector1.length; i++) {
-    dotProduct += vector1[i] * vector2[i];
-    magA += Math.pow(vector1[i], 2);
-    magB += Math.pow(vector2[i], 2);
-  }
-  return dotProduct / (Math.sqrt(magA) * Math.sqrt(magB));
+  console.log(`سوال بی‌پاسخ به شیت اضافه شد: ${question}`);
 }
 
 // هندلر API
 module.exports = async (req, res) => {
-  const userQuestion = (req.query.q || '').toLowerCase();
-  if (!userQuestion) return res.status(400).json({ error: "سوال ارسال نشده است" });
+  const userQuestion = req.query.q?.toLowerCase();
+  if (!userQuestion) {
+    return res.status(400).json({ error: "سوال ارسال نشده است" });
+  }
 
   try {
     const data = await getSheetData();
+
     let bestAnswer = "";
     let bestScore = 0;
 
     for (let row of data) {
-      const score = cosineSimilarity(userQuestion, row.سوال);
+      const sheetQuestion = (row["سوال"] || "").toLowerCase();
+      const sheetAnswer = row["پاسخ"] || "";
+      const score = JaroWinklerDistance(userQuestion, sheetQuestion);
+
       if (score > bestScore) {
         bestScore = score;
-        bestAnswer = row.پاسخ;
+        bestAnswer = sheetAnswer;
       }
     }
 
-    if (bestScore < 0.3 || !bestAnswer) {
+    if (bestScore < 0.7 || !bestAnswer) {
       await addUnansweredQuestion(userQuestion);
-      return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد.", score: bestScore });
+      return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد." });
     }
 
     return res.json({ answer: bestAnswer, score: bestScore });
