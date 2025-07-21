@@ -1,27 +1,26 @@
 const { WordTokenizer, JaroWinklerDistance } = require('natural');
 const { google } = require('googleapis');
+const fetch = require('node-fetch');
 
-const tokenizer = new WordTokenizer();
-
-// آیدی شیت شما
+// ---- CONFIG ----
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
 const RANGE = 'Sheet1!A:B';
+const HF_MODEL = 'bigscience/bloomz-560m'; // مدل سبک HuggingFace
 
-// احراز هویت
-function getAuth() {
-  return new google.auth.GoogleAuth({
+// ---- توابع ----
+const tokenizer = new WordTokenizer();
+
+async function getSheetData() {
+  const auth = new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.CLIENT_EMAIL,
-      private_key: process.env.PRIVATE_KEY.replace(/\\n/g, '\n')
+      private_key: process.env.PRIVATE_KEY.replace(/\\n/g, '\n'),
     },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   });
-}
 
-// گرفتن داده‌ها از Google Sheets
-async function getSheetData() {
-  const auth = getAuth();
-  const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
+  const client = await auth.getClient();
+  const sheets = google.sheets({ version: 'v4', auth: client });
 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -35,24 +34,56 @@ async function getSheetData() {
   }));
 }
 
-// اضافه کردن سوالات بی‌پاسخ به Google Sheet
-async function addUnansweredQuestion(question) {
-  const auth = getAuth();
-  const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
+async function saveUnansweredQuestion(question) {
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: process.env.CLIENT_EMAIL,
+        private_key: process.env.PRIVATE_KEY.replace(/\\n/g, '\n'),
+      },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
-    range: 'Sheet1!A:A',
-    valueInputOption: 'RAW',
-    requestBody: {
-      values: [[question]],
-    },
-  });
+    const client = await auth.getClient();
+    const sheets = google.sheets({ version: 'v4', auth: client });
 
-  console.log(`سوال بی‌پاسخ به شیت اضافه شد: ${question}`);
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'Sheet1!A:A',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [[question]],
+      },
+    });
+  } catch (error) {
+    console.error('خطا در ذخیره سوال بی‌پاسخ:', error);
+  }
 }
 
-// هندلر API
+async function askHuggingFace(question) {
+  try {
+    const response = await fetch(`https://api-inference.huggingface.co/models/${HF_MODEL}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.HF_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ inputs: question }),
+    });
+
+    const result = await response.json();
+    if (result.error) {
+      console.error('HuggingFace Error:', result.error);
+      return "پاسخ مناسبی پیدا نشد.";
+    }
+    return result[0]?.generated_text || "پاسخ مناسبی پیدا نشد.";
+  } catch (err) {
+    console.error('HuggingFace API Error:', err);
+    return "خطا در تولید پاسخ.";
+  }
+}
+
+// ---- هندلر API ----
 module.exports = async (req, res) => {
   const userQuestion = req.query.q?.toLowerCase();
   if (!userQuestion) {
@@ -62,6 +93,7 @@ module.exports = async (req, res) => {
   try {
     const data = await getSheetData();
 
+    let bestMatch = "";
     let bestAnswer = "";
     let bestScore = 0;
 
@@ -72,16 +104,19 @@ module.exports = async (req, res) => {
 
       if (score > bestScore) {
         bestScore = score;
+        bestMatch = sheetQuestion;
         bestAnswer = sheetAnswer;
       }
     }
 
-    if (bestScore < 0.7 || !bestAnswer) {
-      await addUnansweredQuestion(userQuestion);
-      return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد." });
+    if (bestScore < 0.7) {
+      // ذخیره سوال و پرسش از HuggingFace
+      await saveUnansweredQuestion(userQuestion);
+      const hfAnswer = await askHuggingFace(userQuestion);
+      return res.json({ answer: hfAnswer, match: "AI Response", score: 0 });
     }
 
-    return res.json({ answer: bestAnswer, score: bestScore });
+    return res.json({ answer: bestAnswer, match: bestMatch, score: bestScore });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "خطا در ارتباط با سیستم پاسخ‌گو" });
