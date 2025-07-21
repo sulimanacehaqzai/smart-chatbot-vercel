@@ -1,10 +1,10 @@
 const { google } = require('googleapis');
+const natural = require('natural');
 
-// آیدی شیت
 const SPREADSHEET_ID = '1Q4PqM8FCNYVItiSlvpbNFsemrNhUZu-guuNSTe5gpE8';
-const RANGE = 'Sheet1!A:B'; // مطمئن شو نام Sheet درست باشد
+const RANGE = 'Sheet1!A:B';
 
-// گرفتن کلیدها از Environment Variables
+// احراز هویت گوگل
 function getAuth() {
   return new google.auth.GoogleAuth({
     credentials: {
@@ -15,7 +15,7 @@ function getAuth() {
   });
 }
 
-// گرفتن تمام سوالات و پاسخ‌ها
+// گرفتن داده‌ها
 async function getSheetData() {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth });
@@ -31,7 +31,7 @@ async function getSheetData() {
   }));
 }
 
-// افزودن سوال بی‌پاسخ به شیت
+// ذخیره سوال بی‌پاسخ
 async function addUnansweredQuestion(question) {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth });
@@ -45,7 +45,6 @@ async function addUnansweredQuestion(question) {
   });
 }
 
-// هندلر API
 module.exports = async (req, res) => {
   const userQuestion = (req.query.q || '').toLowerCase();
   if (!userQuestion) {
@@ -55,16 +54,23 @@ module.exports = async (req, res) => {
   try {
     const data = await getSheetData();
 
-    // جستجوی ساده (اگر بخشی از متن سوال شبیه باشد)
-    let found = data.find(item => userQuestion.includes(item.سوال) || item.سوال.includes(userQuestion));
+    let bestScore = 0;
+    let bestAnswer = '';
 
-    if (!found) {
-      // اگر سوال پیدا نشد، در شیت ذخیره کن
+    data.forEach(item => {
+      const score = natural.JaroWinklerDistance(userQuestion, item.سوال);
+      if (score > bestScore) {
+        bestScore = score;
+        bestAnswer = item.پاسخ;
+      }
+    });
+
+    if (bestScore < 0.7) {
       await addUnansweredQuestion(userQuestion);
-      return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد. سوال شما ذخیره شد." });
+      return res.json({ answer: "متأسفم، پاسخ مناسب پیدا نشد. سوال شما ذخیره شد.", score: bestScore });
     }
 
-    return res.json({ answer: found.پاسخ });
+    return res.json({ answer: bestAnswer, score: bestScore });
   } catch (err) {
     console.error("ERROR:", err);
     return res.status(500).json({ error: "خطا در ارتباط با سیستم پاسخ‌گو" });
